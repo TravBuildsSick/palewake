@@ -346,13 +346,15 @@ fun StoreScreen() {
             }
         },
     ) { padding ->
-        Box(
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = loading && apps.isNotEmpty(),
+            onRefresh = { refreshToken++ },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
             when {
-                loading -> GlowSpinner(modifier = Modifier.align(Alignment.Center))
+                loading && apps.isEmpty() -> GlowSpinner(modifier = Modifier.align(Alignment.Center))
                 error != null -> Column(
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -379,6 +381,7 @@ fun StoreScreen() {
                 else -> LazyColumn(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     items(apps, key = { it.id }) { app ->
                         AppCard(app = app, scope = scope, context = context)
