@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -106,6 +107,7 @@ data class StoreApp(
     val name: String,
     val description: String,
     val packageName: String,
+    val repo: String,
     val versionCode: Int,
     val versionName: String,
     val notes: String,
@@ -158,6 +160,7 @@ private fun fetchLatestRelease(entry: CatalogEntry): StoreApp? {
             name = entry.name,
             description = entry.description,
             packageName = entry.packageName,
+            repo = entry.repo,
             versionCode = versionCode,
             versionName = o.optString("name", tagName),
             notes = o.optString("body", ""),
@@ -166,6 +169,48 @@ private fun fetchLatestRelease(entry: CatalogEntry): StoreApp? {
         )
     } catch (e: Exception) {
         return null
+    } finally {
+        connection.disconnect()
+    }
+}
+
+// Full release history for one app (not just latest) — used by the version-picker sheet.
+// Tags that aren't a plain "v<versionCode>" (e.g. wrackline's "pack-*" content releases) are
+// skipped, same as a release with no usable .apk asset.
+private fun fetchReleaseHistory(app: StoreApp): List<StoreApp> {
+    val connection =
+        URL("https://api.github.com/repos/${app.repo}/releases").openConnection() as HttpURLConnection
+    connection.connectTimeout = 8000
+    connection.readTimeout = 8000
+    connection.setRequestProperty("Accept", "application/vnd.github+json")
+    try {
+        if (connection.responseCode !in 200..299) return emptyList()
+        val body = connection.inputStream.bufferedReader().use { it.readText() }
+        val array = org.json.JSONArray(body)
+        return (0 until array.length()).mapNotNull { i ->
+            val o = array.getJSONObject(i)
+            val tagName = o.getString("tag_name")
+            if (!Regex("^v\\d+$").matches(tagName)) return@mapNotNull null
+            val versionCode = tagName.trimStart('v').toIntOrNull() ?: return@mapNotNull null
+            val assets = o.getJSONArray("assets")
+            val apkAsset = (0 until assets.length())
+                .map { assets.getJSONObject(it) }
+                .firstOrNull { it.getString("name").endsWith(".apk") } ?: return@mapNotNull null
+            StoreApp(
+                id = app.id,
+                name = app.name,
+                description = app.description,
+                packageName = app.packageName,
+                repo = app.repo,
+                versionCode = versionCode,
+                versionName = o.optString("name", tagName),
+                notes = o.optString("body", ""),
+                downloadUrl = apkAsset.getString("browser_download_url"),
+                sizeBytes = apkAsset.optLong("size", 0L),
+            )
+        }.sortedByDescending { it.versionCode }
+    } catch (e: Exception) {
+        return emptyList()
     } finally {
         connection.disconnect()
     }
@@ -293,6 +338,17 @@ fun StoreScreen() {
     var error by remember { mutableStateOf<String?>(null) }
     var refreshToken by remember { mutableStateOf(0) }
 
+    var historyApp by remember { mutableStateOf<StoreApp?>(null) }
+    var historyVersions by remember { mutableStateOf<List<StoreApp>>(emptyList()) }
+    var historyLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(historyApp) {
+        val app = historyApp ?: return@LaunchedEffect
+        historyLoading = true
+        historyVersions = withContext(Dispatchers.IO) { fetchReleaseHistory(app) }
+        historyLoading = false
+    }
+
     LaunchedEffect(refreshToken) {
         loading = true
         error = null
@@ -384,7 +440,46 @@ fun StoreScreen() {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(apps, key = { it.id }) { app ->
-                        AppCard(app = app, scope = scope, context = context)
+                        AppCard(
+                            app = app,
+                            scope = scope,
+                            context = context,
+                            onOpenHistory = { historyApp = app },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val sheetApp = historyApp
+    if (sheetApp != null) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { historyApp = null },
+            containerColor = NavySurface,
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    "${sheetApp.name} — versions",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                when {
+                    historyLoading -> GlowSpinner(modifier = Modifier.padding(bottom = 24.dp))
+                    historyVersions.isEmpty() -> Text(
+                        "No release history found.",
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 24.dp),
+                    )
+                    else -> Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(bottom = 24.dp),
+                    ) {
+                        historyVersions.forEach { version ->
+                            VersionRow(app = version, scope = scope, context = context)
+                        }
                     }
                 }
             }
@@ -397,6 +492,7 @@ private fun AppCard(
     app: StoreApp,
     scope: kotlinx.coroutines.CoroutineScope,
     context: android.content.Context,
+    onOpenHistory: () -> Unit,
 ) {
     var status by remember(app.id) { mutableStateOf<String?>(null) }
     var busy by remember(app.id) { mutableStateOf(false) }
@@ -423,6 +519,7 @@ private fun AppCard(
                 ),
                 shape = cardShape,
             )
+            .clickable { onOpenHistory() }
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -493,8 +590,8 @@ private fun AppCard(
 
             if (busy) {
                 GlowSpinner(size = 24.dp)
-            } else {
-                val label = if (!isInstalled) "Install" else if (hasUpdate) "Update" else "Reinstall"
+            } else if (hasUpdate || !isInstalled) {
+                val label = if (!isInstalled) "Install" else "Update"
                 val onClick = {
                     scope.launch {
                         busy = true
@@ -513,30 +610,92 @@ private fun AppCard(
                     }
                     Unit
                 }
-
-                if (hasUpdate || !isInstalled) {
-                    val buttonGlow = rememberPulse(min = 6f, max = 16f, durationMs = 1400)
-                    Box(
-                        modifier = Modifier
-                            .shadow(buttonGlow.dp, RoundedCornerShape(12.dp), ambientColor = RedAccent, spotColor = RedAccent)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Brush.linearGradient(listOf(RedAccent, RedAccentDark)))
-                            .clickable { onClick() }
-                            .padding(horizontal = 18.dp, vertical = 10.dp),
-                    ) {
-                        Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, IceBlue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .clickable { onClick() }
-                            .padding(horizontal = 18.dp, vertical = 10.dp),
-                    ) {
-                        Text(label, color = IceBlue, fontWeight = FontWeight.Medium, fontSize = 13.sp)
-                    }
+                val buttonGlow = rememberPulse(min = 6f, max = 16f, durationMs = 1400)
+                Box(
+                    modifier = Modifier
+                        .shadow(buttonGlow.dp, RoundedCornerShape(12.dp), ambientColor = RedAccent, spotColor = RedAccent)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Brush.linearGradient(listOf(RedAccent, RedAccentDark)))
+                        .clickable { onClick() }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                ) {
+                    Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
+            } else {
+                Text("Installed", color = IceBlue, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+// One row in the version-history bottom sheet — same install/update logic as AppCard's button,
+// scoped to one specific past release rather than always the latest.
+@Composable
+private fun VersionRow(
+    app: StoreApp,
+    scope: kotlinx.coroutines.CoroutineScope,
+    context: android.content.Context,
+) {
+    var status by remember(app.versionCode) { mutableStateOf<String?>(null) }
+    var busy by remember(app.versionCode) { mutableStateOf(false) }
+    val installedCode = remember(app.versionCode) {
+        if (app.packageName.isNotBlank()) installedVersionCode(context, app.packageName) else null
+    }
+    val isThisInstalled = installedCode == app.versionCode
+    val isInstalled = installedCode != null
+    val hasUpdate = isInstalled && installedCode!! < app.versionCode
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(NavySurfaceLight.copy(alpha = 0.4f))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "v${app.versionName} · ${formatSize(app.sizeBytes)}",
+                color = TextPrimary,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+            )
+            if (app.notes.isNotBlank()) {
+                Text(app.notes, color = TextSecondary, fontSize = 12.sp, maxLines = 2)
+            }
+            status?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
+        }
+        Spacer(modifier = Modifier.size(8.dp))
+        if (busy) {
+            GlowSpinner(size = 20.dp)
+        } else if (isThisInstalled) {
+            Text("Installed", color = IceBlue, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+        } else {
+            val label = if (!isInstalled) "Install" else if (hasUpdate) "Update" else "Downgrade"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(RedAccent)
+                    .clickable {
+                        scope.launch {
+                            busy = true
+                            status = "Downloading..."
+                            try {
+                                val dest = File(context.cacheDir, "${app.id}-${app.versionCode}.apk")
+                                val file = withContext(Dispatchers.IO) { downloadApk(app.downloadUrl, dest) }
+                                status = "Installing..."
+                                installApk(context, file)
+                                status = null
+                            } catch (e: Exception) {
+                                status = "Failed: ${e.message}"
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }
