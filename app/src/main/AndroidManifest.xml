@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Without this, PackageManager.getPackageInfo() for any catalog app other than palewake
+         itself throws NameNotFoundException on API 30+ due to package visibility filtering —
+         even when that app genuinely is installed — so every card would show "Install" forever.
+         Not Play-Store-distributed, so this permission isn't subject to Play's justification
+         review; also scales to new catalog apps without a manifest change each time, unlike a
+         static <queries> package list. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
