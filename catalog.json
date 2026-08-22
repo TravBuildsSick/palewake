@@ -5,5 +5,12 @@
     "description": "Self-updating app catalog.",
     "package_name": "suck.alot.palewake",
     "repo": "TravBuildsSick/palewake"
+  },
+  {
+    "id": "wrackline",
+    "name": "Wrackline",
+    "description": "Audio-reactive local music player.",
+    "package_name": "suck.alot.wrackline",
+    "repo": "TravBuildsSick/wrackline"
   }
 ]
