@@ -1,0 +1,9 @@
+[
+  {
+    "id": "palewake",
+    "name": "Palewake",
+    "description": "Self-updating app catalog.",
+    "package_name": "suck.alot.palewake",
+    "repo": "TravBuildsSick/palewake"
+  }
+]

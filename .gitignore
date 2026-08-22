@@ -1,0 +1,41 @@
+# Local machine config — never portable, may contain local paths
+local.properties
+*.iml
+.idea/
+.vscode/
+
+# Build outputs
+build/
+app/build/
+.gradle/
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Signing / secrets — must never be committed
+*.keystore
+*.jks
+key.properties
+keystore.properties
+*.pem
+*.p12
+.upload_token
+.env
+.env.*
+*_token
+*_secret
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+*.hprof
