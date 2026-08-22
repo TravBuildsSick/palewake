@@ -3,6 +3,7 @@ package suck.alot.palewake
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import coil.compose.SubcomposeAsyncImageContent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -99,6 +100,7 @@ data class CatalogEntry(
     val description: String,
     val packageName: String,
     val repo: String, // "owner/repo" — its own release repo, not necessarily this one
+    val iconUrl: String?,
 )
 
 // A catalog entry merged with its latest GitHub release.
@@ -108,6 +110,7 @@ data class StoreApp(
     val description: String,
     val packageName: String,
     val repo: String,
+    val iconUrl: String?,
     val versionCode: Int,
     val versionName: String,
     val notes: String,
@@ -130,6 +133,7 @@ private fun fetchCatalog(): List<CatalogEntry> {
                 description = o.optString("description", ""),
                 packageName = o.optString("package_name", ""),
                 repo = o.getString("repo"),
+                iconUrl = o.optString("icon_url", "").takeIf { it.isNotBlank() },
             )
         }
     } finally {
@@ -161,6 +165,7 @@ private fun fetchLatestRelease(entry: CatalogEntry): StoreApp? {
             description = entry.description,
             packageName = entry.packageName,
             repo = entry.repo,
+            iconUrl = entry.iconUrl,
             versionCode = versionCode,
             versionName = o.optString("name", tagName),
             notes = o.optString("body", ""),
@@ -202,6 +207,7 @@ private fun fetchReleaseHistory(app: StoreApp): List<StoreApp> {
                 description = app.description,
                 packageName = app.packageName,
                 repo = app.repo,
+                iconUrl = app.iconUrl,
                 versionCode = versionCode,
                 versionName = o.optString("name", tagName),
                 notes = o.optString("body", ""),
@@ -549,6 +555,27 @@ private fun AppCard(
                                 .size(44.dp)
                                 .clip(CircleShape),
                         )
+                    } else if (app.iconUrl != null) {
+                        coil.compose.SubcomposeAsyncImage(
+                            model = app.iconUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape),
+                        ) {
+                            val painterState = painter.state
+                            if (painterState is coil.compose.AsyncImagePainter.State.Success) {
+                                SubcomposeAsyncImageContent()
+                            } else {
+                                Text(
+                                    app.name.take(1).uppercase(),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                )
+                            }
+                        }
                     } else {
                         Text(
                             app.name.take(1).uppercase(),

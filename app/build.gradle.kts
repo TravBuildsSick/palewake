@@ -25,8 +25,8 @@ android {
         applicationId = "suck.alot.palewake"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
     }
 
     signingConfigs {
@@ -85,4 +85,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 }

@@ -4,13 +4,15 @@
     "name": "Palewake",
     "description": "Self-updating app catalog.",
     "package_name": "suck.alot.palewake",
-    "repo": "TravBuildsSick/palewake"
+    "repo": "TravBuildsSick/palewake",
+    "icon_url": "https://raw.githubusercontent.com/TravBuildsSick/palewake/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
   },
   {
     "id": "wrackline",
     "name": "Wrackline",
     "description": "Audio-reactive local music player.",
     "package_name": "suck.alot.wrackline",
-    "repo": "TravBuildsSick/wrackline"
+    "repo": "TravBuildsSick/wrackline",
+    "icon_url": "https://raw.githubusercontent.com/TravBuildsSick/wrackline/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
   }
 ]
